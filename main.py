@@ -82,7 +82,7 @@ async def work(n: int = 1):
     # Simulate work
     for _ in range(n):
         pass
-    return {"email": "gangulysiddhartha22@gmail.com", "done": n}
+    return {"email": "23f3003587@ds.study.iitm.ac.in", "done": n}
 
 @app.get("/metrics")
 async def metrics():
