@@ -11,18 +11,10 @@ import os
 
 app = FastAPI(title="Prometheus FastAPI Service")
 
-# Prometheus Counter
-REQUEST_COUNTER = Counter(
-    'http_requests_total', 
-    'Total HTTP requests', 
-    ['method', 'path']
-)
-
-# In-memory log storage
+REQUEST_COUNTER = Counter('http_requests_total', 'Total HTTP requests', ['method', 'path'])
 logs = deque(maxlen=1000)
 start_time = time.time()
 
-# Structured JSON Logging
 class JSONLogFormatter(logging.Formatter):
     def format(self, record):
         return json.dumps({
@@ -39,7 +31,6 @@ handler.setFormatter(JSONLogFormatter())
 logger.addHandler(handler)
 logger.propagate = False
 
-# Log Capture Handler for /logs/tail
 class LogCaptureHandler(logging.Handler):
     def emit(self, record):
         try:
@@ -55,49 +46,36 @@ class LogCaptureHandler(logging.Handler):
 
 logger.addHandler(LogCaptureHandler())
 
-# Middleware: Logging + Metrics
 @app.middleware("http")
 async def log_and_metrics_middleware(request: Request, call_next):
     request_id = str(uuid.uuid4())
     path = str(request.url.path)
     method = request.method
 
-    # Log the request
-    logger.info(f"{method} {path}", extra={
-        "path": path,
-        "request_id": request_id
-    })
+    logger.info(f"{method} {path}", extra={"path": path, "request_id": request_id})
 
-    # Process request
     response = await call_next(request)
 
-    # Increment Prometheus counter
     REQUEST_COUNTER.labels(method=method, path=path).inc()
-
     return response
 
-# Endpoints
 @app.get("/work")
 async def work(n: int = 1):
-    # Simulate work
+    if n < 1:
+        n = 1
+    if n > 20:   # Safety limit to prevent timeout
+        n = 20
     for _ in range(n):
         pass
-    return {"email": "23f3003587@ds.study.iitm.ac.in", "done": n}
+    return {"email": "gangulysiddhartha22@gmail.com", "done": n}
 
 @app.get("/metrics")
 async def metrics():
-    """Prometheus metrics endpoint"""
-    return PlainTextResponse(
-        generate_latest(REGISTRY).decode('utf-8'),
-        media_type="text/plain; version=0.0.4; charset=utf-8"
-    )
+    return PlainTextResponse(generate_latest(REGISTRY).decode('utf-8'))
 
 @app.get("/healthz")
 async def healthz():
-    return {
-        "status": "ok",
-        "uptime_s": round(time.time() - start_time, 2)
-    }
+    return {"status": "ok", "uptime_s": round(time.time() - start_time, 2)}
 
 @app.get("/logs/tail")
 async def logs_tail(limit: int = 50):
@@ -105,4 +83,4 @@ async def logs_tail(limit: int = 50):
 
 @app.get("/")
 async def root():
-    return {"message": "Prometheus FastAPI Service is running"}
+    return {"message": "Service running"}
