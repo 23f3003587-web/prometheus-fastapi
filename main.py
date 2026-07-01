@@ -7,19 +7,16 @@ from collections import deque
 import uuid
 from datetime import datetime
 import logging
-import os
 
 app = FastAPI(title="Prometheus FastAPI Service")
 
 # ====================== PROMETHEUS METRICS ======================
+# Use a unique name to avoid conflicts with default metrics
 REQUEST_COUNTER = Counter(
-    'http_requests_total', 
+    'app_http_requests_total',           # Changed name to avoid duplication
     'Total HTTP requests', 
     ['method', 'path']
 )
-
-# Ensure the counter is registered
-REGISTRY.register(REQUEST_COUNTER)
 
 logs = deque(maxlen=1000)
 start_time = time.time()
@@ -67,7 +64,6 @@ async def log_and_metrics_middleware(request: Request, call_next):
     
     response = await call_next(request)
     
-    # Increment counter
     REQUEST_COUNTER.labels(method=method, path=path).inc()
     
     return response
