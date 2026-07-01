@@ -11,10 +11,20 @@ import os
 
 app = FastAPI(title="Prometheus FastAPI Service")
 
-REQUEST_COUNTER = Counter('http_requests_total', 'Total HTTP requests', ['method', 'path'])
+# ====================== PROMETHEUS METRICS ======================
+REQUEST_COUNTER = Counter(
+    'http_requests_total', 
+    'Total HTTP requests', 
+    ['method', 'path']
+)
+
+# Ensure the counter is registered
+REGISTRY.register(REQUEST_COUNTER)
+
 logs = deque(maxlen=1000)
 start_time = time.time()
 
+# ====================== LOGGING SETUP ======================
 class JSONLogFormatter(logging.Formatter):
     def format(self, record):
         return json.dumps({
@@ -46,24 +56,28 @@ class LogCaptureHandler(logging.Handler):
 
 logger.addHandler(LogCaptureHandler())
 
+# ====================== MIDDLEWARE ======================
 @app.middleware("http")
 async def log_and_metrics_middleware(request: Request, call_next):
     request_id = str(uuid.uuid4())
     path = str(request.url.path)
     method = request.method
-
+    
     logger.info(f"{method} {path}", extra={"path": path, "request_id": request_id})
-
+    
     response = await call_next(request)
-
+    
+    # Increment counter
     REQUEST_COUNTER.labels(method=method, path=path).inc()
+    
     return response
 
+# ====================== ROUTES ======================
 @app.get("/work")
 async def work(n: int = 1):
     if n < 1:
         n = 1
-    if n > 20:   # Safety limit to prevent timeout
+    if n > 20:
         n = 20
     for _ in range(n):
         pass
@@ -71,7 +85,11 @@ async def work(n: int = 1):
 
 @app.get("/metrics")
 async def metrics():
-    return PlainTextResponse(generate_latest(REGISTRY).decode('utf-8'))
+    """Prometheus metrics endpoint"""
+    return PlainTextResponse(
+        generate_latest(REGISTRY).decode('utf-8'),
+        media_type="text/plain; version=0.0.4; charset=utf-8"
+    )
 
 @app.get("/healthz")
 async def healthz():
