@@ -11,17 +11,22 @@ import logging
 app = FastAPI(title="Prometheus FastAPI Service")
 
 # ====================== PROMETHEUS METRICS ======================
-# Use a unique name to avoid conflicts with default metrics
 REQUEST_COUNTER = Counter(
-    'app_http_requests_total',           # Changed name to avoid duplication
-    'Total HTTP requests', 
+    'http_requests_total',
+    'Total HTTP requests',
     ['method', 'path']
 )
+
+# Safe registration (avoid duplicate error on reloads)
+try:
+    REGISTRY.register(REQUEST_COUNTER)
+except ValueError:
+    pass  # Already registered
 
 logs = deque(maxlen=1000)
 start_time = time.time()
 
-# ====================== LOGGING SETUP ======================
+# ====================== LOGGING ======================
 class JSONLogFormatter(logging.Formatter):
     def format(self, record):
         return json.dumps({
@@ -43,7 +48,7 @@ class LogCaptureHandler(logging.Handler):
         try:
             log_dict = json.loads(record.getMessage())
             logs.append(log_dict)
-        except Exception:
+        except:
             logs.append({
                 "level": record.levelname.lower(),
                 "ts": datetime.utcnow().isoformat() + "Z",
@@ -59,13 +64,13 @@ async def log_and_metrics_middleware(request: Request, call_next):
     request_id = str(uuid.uuid4())
     path = str(request.url.path)
     method = request.method
-    
+
     logger.info(f"{method} {path}", extra={"path": path, "request_id": request_id})
-    
+
     response = await call_next(request)
-    
+
     REQUEST_COUNTER.labels(method=method, path=path).inc()
-    
+
     return response
 
 # ====================== ROUTES ======================
@@ -81,7 +86,6 @@ async def work(n: int = 1):
 
 @app.get("/metrics")
 async def metrics():
-    """Prometheus metrics endpoint"""
     return PlainTextResponse(
         generate_latest(REGISTRY).decode('utf-8'),
         media_type="text/plain; version=0.0.4; charset=utf-8"
